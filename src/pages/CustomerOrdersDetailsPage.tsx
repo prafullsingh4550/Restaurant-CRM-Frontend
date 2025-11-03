@@ -53,9 +53,9 @@ const CustomerOrdersDetailsPage = () => {
 
       // Detect if input is phone or order id
       if (/^\d{10}$/.test(searchValue)) {
-        url = `http://localhost:3000/api/v1/orders/recent/${searchValue}`;
+        url = `https://restraunt-backend.up.railway.app/api/v1/orders/recent/${searchValue}`;
       } else {
-        url = `http://localhost:3000/api/v1/orders/${searchValue}`;
+        url = `https://restraunt-backend.up.railway.app/api/v1/orders/${searchValue}`;
       }
 
       const res = await fetch(url);

@@ -129,25 +129,37 @@ const Menu = () => {
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-10 bg-card border-b border-border shadow-sm">
         <div className="container mx-auto px-4 py-4">
-          <div className="space-y-4 mb-4">
-          {/* Track Order Button - Separate from header */}
-            <div className="space-y-4 mb-4">
-          {/* Track Order Button - Separate from header */}
-            <div className="flex justify-center">
-                <Button 
-                  className="fixed top-7 right-6 z-50 rounded-full shadow-lg h-14 w-14 md:w-auto md:px-6" 
-                  variant="outline" 
-                  onClick={() => navigate('/')}
-                >
-                  Track and review your order
-                </Button>
-              </div>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Our Menu</h1>
-              <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
-            </div>
-          </div>
+  <div className="flex items-center justify-between mb-4">
+    
+    {/* LEFT: Dummy logo */}
+    <div className="flex items-center">
+      <img
+        src="https://imgs.search.brave.com/rGWOzyaSAsEhcFW_QTjvpv4Y_JVhJhN5S9V8VIR64Yw/rs:fit:500:0:1:0/g:ce/aHR0cHM6Ly9zaW1w/bHliZWRzc3Vzc2V4/LmNvLnVrL3dwLWNv/bnRlbnQvdXBsb2Fk/cy8yMDIzLzA1L1Jl/c3QtQXNzdXJlZC1M/b2dvLmpwZw" // replace with your logo path
+        alt="Logo"
+        className="h-20 w-25 object-contain"
+      />
+    </div>
+
+    {/* CENTER: Title + Table + Button */}
+    <div className="flex flex-col items-center text-center flex-1">
+      <h1 className="text-2xl font-bold text-foreground">Our Menu</h1>
+      <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
+
+      <div className="mt-3">
+        <Button
+          className="rounded-full shadow-lg h-14 md:w-auto md:px-6"
+          variant="outline"
+          onClick={() => navigate('/')}
+        >
+          Track and review your order
+        </Button>
+      </div>
+    </div>
+
+    {/* RIGHT: Empty space for perfect centering */}
+    <div className="w-10" />  {/* keeps symmetry with the logo width */}
+
+  </div>
 
           <div className="flex flex-col gap-3">
             <Input
