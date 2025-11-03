@@ -34,7 +34,7 @@ export const CartDrawer = ({
       <SheetTrigger asChild>
         <Button
           size="lg"
-          className="fixed bottom-6 right-6 rounded-full shadow-lg h-14 w-14 md:w-auto md:px-6"
+          className="fixed top-5 right-6 z-50 rounded-full shadow-lg h-14 w-14 md:w-auto md:px-6"
         >
           <div className="relative">
             <ShoppingCart className="w-5 h-5" />

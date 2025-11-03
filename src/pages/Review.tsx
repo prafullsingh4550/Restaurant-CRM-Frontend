@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -7,124 +7,258 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-
+ 
 const Review = () => {
   const { orderId } = useParams();
   const [searchParams] = useSearchParams();
   const tableNumber = searchParams.get('table') || '';
   const navigate = useNavigate();
-
-  const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
-  const [comment, setComment] = useState('');
+ 
+  const [orderDetails, setOrderDetails] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (rating === 0) {
-      toast.error('Please select a rating');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await api.post('/reviews', {
-        orderId,
-        rating,
-        comment: comment.trim(),
+ 
+  const [formData, setFormData] = useState({
+    items: [],
+    staffReview: { rating: 0, comment: '' },
+    ambienceReview: { rating: 0, comment: '' },
+    overallReview: { rating: 0, comment: '' },
+    experience: '',
+    suggestions: '',
+  });
+ 
+  // Fetch order details to display items
+  useEffect(() => {
+    const fetchOrder = async () => {
+      try {
+        const res = await api.get(`/orders/${orderId}`);
+        const order = res.data;
+        setOrderDetails(order);
+        setFormData((prev) => ({
+          ...prev,
+          items: order.items.map((item) => ({
+            menuItemId: item.menuItemId,
+            name: item.name,
+            rating: 0,
+            comment: '',
+          })),
+        }));
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to load order details');
+      }
+    };
+ 
+    fetchOrder();
+  }, [orderId]);
+ 
+  // Helper: update rating or comment for any section
+  const handleRatingChange = (section, index, value) => {
+    if (section === 'items') {
+      setFormData((prev) => {
+        const updated = [...prev.items];
+        updated[index].rating = value;
+        return { ...prev, items: updated };
       });
-
-      toast.success('Thank you for your review!');
-      navigate(`/order/${orderId}?table=${tableNumber}`);
-    } catch (error: any) {
-      console.error('Review submission error:', error);
-      toast.error(error.response?.data?.message || 'Failed to submit review');
-    } finally {
-      setLoading(false);
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [section]: { ...prev[section], rating: value },
+      }));
     }
   };
-
+ 
+  const handleCommentChange = (section, index, value) => {
+    if (section === 'items') {
+      setFormData((prev) => {
+        const updated = [...prev.items];
+        updated[index].comment = value;
+        return { ...prev, items: updated };
+      });
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [section]: { ...prev[section], comment: value },
+      }));
+    }
+  };
+ 
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+ 
+  try {
+    setLoading(true);
+ 
+    // Construct payload according to backend schema
+    const payload = {
+      orderId,
+      itemReviews: formData.items.map((item) => ({
+        menuItemId: item.menuItemId,
+        name: item.name,
+        rating: item.rating,
+        comment: item.comment,
+      })),
+      staffRating: formData.staffReview.rating,
+      ambienceRating: formData.ambienceReview.rating,
+      overallRating: formData.overallReview.rating,
+      experience: formData.overallReview.comment || formData.experience,
+      suggestions: formData.suggestions,
+    };
+ 
+    await api.post('/reviews', payload);
+ 
+    toast.success('Thank you for your feedback!');
+    navigate(`/order/${orderId}?table=${tableNumber}`);
+  } catch (err) {
+    console.error(err);
+    toast.error(err.response?.data?.message || 'Failed to submit review');
+  } finally {
+    setLoading(false);
+  }
+};
+ 
+ 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="max-w-md w-full">
+      <Card className="max-w-2xl w-full">
         <CardHeader>
           <CardTitle>Rate Your Experience</CardTitle>
-          <CardDescription>
-            How was your meal? Your feedback helps us improve.
-          </CardDescription>
+          <CardDescription>We value your feedback on every part of your visit.</CardDescription>
         </CardHeader>
+ 
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="text-center space-y-3">
-              <label className="text-sm font-medium">Rating</label>
-              <div className="flex justify-center gap-2">
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setRating(value)}
-                    onMouseEnter={() => setHoveredRating(value)}
-                    onMouseLeave={() => setHoveredRating(0)}
-                    className="transition-transform hover:scale-110"
-                  >
-                    <Star
-                      className={cn(
-                        'w-10 h-10 transition-colors',
-                        (hoveredRating >= value || rating >= value)
-                          ? 'fill-accent text-accent'
-                          : 'text-muted-foreground'
-                      )}
+          {!orderDetails ? (
+            <p className="text-center text-muted-foreground">Loading order details...</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-8">
+              
+              {/* Item Reviews */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg">Food Items</h3>
+                {formData.items.map((item, index) => (
+                  <div key={item.menuItemId} className="border rounded-lg p-4 space-y-3">
+                    <p className="font-medium">{item.name}</p>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map((value) => (
+                        <Star
+                          key={value}
+                          onClick={() => handleRatingChange('items', index, value)}
+                          className={cn(
+                            'w-6 h-6 cursor-pointer transition-colors',
+                            item.rating >= value ? 'fill-yellow-500 text-yellow-500' : 'text-gray-400'
+                          )}
+                        />
+                      ))}
+                    </div>
+                    <Textarea
+                      placeholder={`Comment about ${item.name}...`}
+                      value={item.comment}
+                      onChange={(e) => handleCommentChange('items', index, e.target.value)}
+                      rows={2}
                     />
-                  </button>
+                  </div>
                 ))}
               </div>
-              {rating > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {rating === 5 && 'Excellent!'}
-                  {rating === 4 && 'Great!'}
-                  {rating === 3 && 'Good!'}
-                  {rating === 2 && 'Fair'}
-                  {rating === 1 && 'Needs Improvement'}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="comment" className="text-sm font-medium mb-2 block">
-                Comments (Optional)
-              </label>
-              <Textarea
-                id="comment"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Tell us about your experience..."
-                rows={4}
-                maxLength={500}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                {comment.length}/500 characters
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate(`/order/${orderId}?table=${tableNumber}`)}
-                className="flex-1"
-              >
-                Skip
-              </Button>
-              <Button type="submit" disabled={loading || rating === 0} className="flex-1">
-                {loading ? 'Submitting...' : 'Submit Review'}
-              </Button>
-            </div>
-          </form>
+ 
+              {/* Staff Review */}
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Staff Service</h3>
+                <div className="flex gap-2 mb-2">
+                  {[1, 2, 3, 4, 5].map((v) => (
+                    <Star
+                      key={v}
+                      onClick={() => handleRatingChange('staffReview', null, v)}
+                      className={cn(
+                        'w-6 h-6 cursor-pointer transition-colors',
+                        formData.staffReview.rating >= v ? 'fill-yellow-500 text-yellow-500' : 'text-gray-400'
+                      )}
+                    />
+                  ))}
+                </div>
+                <Textarea
+                  placeholder="Comments about staff..."
+                  value={formData.staffReview.comment}
+                  onChange={(e) => handleCommentChange('staffReview', null, e.target.value)}
+                  rows={2}
+                />
+              </div>
+ 
+              {/* Ambience Review */}
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Ambience</h3>
+                <div className="flex gap-2 mb-2">
+                  {[1, 2, 3, 4, 5].map((v) => (
+                    <Star
+                      key={v}
+                      onClick={() => handleRatingChange('ambienceReview', null, v)}
+                      className={cn(
+                        'w-6 h-6 cursor-pointer transition-colors',
+                        formData.ambienceReview.rating >= v ? 'fill-yellow-500 text-yellow-500' : 'text-gray-400'
+                      )}
+                    />
+                  ))}
+                </div>
+                <Textarea
+                  placeholder="Comments about ambience..."
+                  value={formData.ambienceReview.comment}
+                  onChange={(e) => handleCommentChange('ambienceReview', null, e.target.value)}
+                  rows={2}
+                />
+              </div>
+ 
+              {/* Overall Review */}
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Overall Experience</h3>
+                <div className="flex gap-2 mb-2">
+                  {[1, 2, 3, 4, 5].map((v) => (
+                    <Star
+                      key={v}
+                      onClick={() => handleRatingChange('overallReview', null, v)}
+                      className={cn(
+                        'w-6 h-6 cursor-pointer transition-colors',
+                        formData.overallReview.rating >= v ? 'fill-yellow-500 text-yellow-500' : 'text-gray-400'
+                      )}
+                    />
+                  ))}
+                </div>
+                <Textarea
+                  placeholder="Your overall experience..."
+                  value={formData.overallReview.comment}
+                  onChange={(e) => handleCommentChange('overallReview', null, e.target.value)}
+                  rows={2}
+                />
+              </div>
+ 
+              {/* Extra Suggestions */}
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Suggestions</h3>
+                <Textarea
+                  placeholder="Any suggestions for us?"
+                  value={formData.suggestions}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, suggestions: e.target.value }))}
+                  rows={3}
+                />
+              </div>
+ 
+              {/* Submit */}
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate(`/order/${orderId}?table=${tableNumber}`)}
+                  className="flex-1"
+                >
+                  Skip
+                </Button>
+                <Button type="submit" disabled={loading} className="flex-1">
+                  {loading ? 'Submitting...' : 'Submit Review'}
+                </Button>
+              </div>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 };
-
+ 
 export default Review;

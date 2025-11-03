@@ -49,6 +49,7 @@ ehthumbs.db
 # local environment
 .envrc
 *.local
+.env
 
 # temporary files
 *.tmp

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Trash2, Clock } from 'lucide-react';
+import { LogOut, Trash2, Clock, BarChart3, Search, RefreshCw, Star } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ interface Order {
   orderId: string;
   tableNumber: string;
   customerName: string;
+  customerPhone: string;
   orderStatus: string;
   total: number;
   createdAt: string;
@@ -50,10 +51,18 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
   const [statusUpdate, setStatusUpdate] = useState<{ orderId: string; status: string; eta?: string } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [refreshing, setRefreshing] = useState(false);
   const { on, off } = useSocket();
 
   useEffect(() => {
     fetchOrders();
+
+    // Auto-refresh every 4 minutes
+    const refreshInterval = setInterval(() => {
+      fetchOrders();
+    }, 4 * 60 * 1000);
 
     const handleAdminOrderUpdate = (data: any) => {
       setOrders((prev) =>
@@ -68,6 +77,7 @@ const AdminDashboard = () => {
     on('admin_order_updated', handleAdminOrderUpdate);
 
     return () => {
+      clearInterval(refreshInterval);
       off('admin_order_updated', handleAdminOrderUpdate);
     };
   }, []);
@@ -75,6 +85,7 @@ const AdminDashboard = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
+      setRefreshing(true);
       const response = await api.get('/orders');
       setOrders(response.data.orders || response.data || []);
     } catch (error: any) {
@@ -87,7 +98,13 @@ const AdminDashboard = () => {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleManualRefresh = () => {
+    fetchOrders();
+    toast.success('Orders refreshed');
   };
 
   const handleLogout = async () => {
@@ -132,6 +149,15 @@ const AdminDashboard = () => {
     }
   };
 
+  const filteredOrders = orders.filter((order) => {
+    const matchesStatus = statusFilter === 'all' || order.orderStatus === statusFilter;
+    const matchesSearch = 
+      searchQuery === '' ||
+      order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.customerPhone.includes(searchQuery);
+    return matchesStatus && matchesSearch;
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -152,6 +178,18 @@ const AdminDashboard = () => {
             <p className="text-sm text-muted-foreground">Manage orders and menu</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/admin/analytics')}>
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Analytics Dashboard
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/admin/reviews-table')}
+              className="flex items-center gap-2"
+            >
+              <Star className="w-4 h-4" />
+              Review Table
+            </Button>
             <Button variant="outline" onClick={() => navigate('/admin/menu')}>
               Menu Management
             </Button>
@@ -167,11 +205,43 @@ const AdminDashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Recent Orders</CardTitle>
+            <div className="flex gap-4 mt-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by Order ID or Phone Number"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="received">Received</SelectItem>
+                  <SelectItem value="preparing">Preparing</SelectItem>
+                  <SelectItem value="ready">Ready</SelectItem>
+                  <SelectItem value="served">Served</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button 
+                variant="outline" 
+                onClick={handleManualRefresh}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            {orders.length === 0 ? (
+            {filteredOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
-                No orders yet
+                {orders.length === 0 ? 'No orders yet' : 'No orders match your filters'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -181,23 +251,32 @@ const AdminDashboard = () => {
                       <TableHead>Order ID</TableHead>
                       <TableHead>Table</TableHead>
                       <TableHead>Customer</TableHead>
+                      <TableHead>Phone No</TableHead>                      
                       <TableHead>Status</TableHead>
-                      <TableHead>ETA (min)</TableHead>
+                      {/* <TableHead>ETA (min)</TableHead> */}
                       <TableHead>Total</TableHead>
                       <TableHead>Time</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orders.map((order) => (
+                    {filteredOrders.map((order) => (
                       <TableRow key={order._id}>
-                        <TableCell className="font-medium">{order.orderId}</TableCell>
+                        <TableCell className="font-medium">
+                          <button
+                            onClick={() => navigate(`/admin/orders/${order.orderId}`)}
+                            className="text-primary hover:underline cursor-pointer"
+                          >
+                            {order.orderId}
+                          </button>
+                        </TableCell>
                         <TableCell>{order.tableNumber}</TableCell>
                         <TableCell>{order.customerName}</TableCell>
+                        <TableCell>{order.customerPhone}</TableCell>
                         <TableCell>
                           <Select
                             value={order.orderStatus}
-                            onValueChange={(value) => handleStatusChange(order._id, value)}
+                            onValueChange={(value) => handleStatusChange(order.orderId, value)}
                           >
                             <SelectTrigger className="w-32">
                               <SelectValue />
@@ -211,7 +290,7 @@ const AdminDashboard = () => {
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell>
+                        {/* <TableCell>
                           <div className="flex items-center gap-2">
                             <Input
                               type="number"
@@ -219,7 +298,7 @@ const AdminDashboard = () => {
                               className="w-20"
                               onChange={(e) =>
                                 setStatusUpdate({
-                                  orderId: order._id,
+                                  orderId: order.orderId,
                                   status: order.orderStatus,
                                   eta: e.target.value,
                                 })
@@ -227,16 +306,16 @@ const AdminDashboard = () => {
                             />
                             <Clock className="w-4 h-4 text-muted-foreground" />
                           </div>
-                        </TableCell>
+                        </TableCell> */}
                         <TableCell>₹{order.total.toFixed(2)}</TableCell>
                         <TableCell>
-                          {new Date(order.createdAt).toLocaleTimeString()}
+                          {new Date(order.createdAt).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => setDeleteOrderId(order._id)}
+                            onClick={() => setDeleteOrderId(order.orderId)}
                             className="text-destructive"
                           >
                             <Trash2 className="w-4 h-4" />

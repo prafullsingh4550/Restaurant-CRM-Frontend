@@ -25,6 +25,8 @@ const Menu = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [vegFilter, setVegFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [labelFilter, setLabelFilter] = useState<string>('all');
   
   const cart = useCart(tableNumber);
 
@@ -35,16 +37,12 @@ const Menu = () => {
     }
     
     fetchMenu();
-  }, [tableNumber, vegFilter]);
+  }, [tableNumber]);
 
   const fetchMenu = async () => {
     try {
       setLoading(true);
-      const params: any = {};
-      if (vegFilter === 'veg') params.veg = 'true';
-      if (vegFilter === 'non-veg') params.veg = 'false';
-      
-      const response = await api.get('/menu', { params });
+      const response = await api.get('/menu');
       setMenuItems(response.data.items || []);
     } catch (error: any) {
       toast.error('Failed to load menu');
@@ -71,11 +69,43 @@ const Menu = () => {
     navigate(`/checkout?table=${tableNumber}`);
   };
 
-  // Group items by category
-  const allTimeFavorites = menuItems.filter((item) => item.isAllTimeFavorite);
-  const chefsSpecials = menuItems.filter((item) => item.isChefsSpecial);
-  
-  const categorizedItems = menuItems.reduce((acc, item) => {
+  // Get unique categories
+  const categories = Array.from(new Set(menuItems.map(item => item.categoryId?.name).filter(Boolean))) as string[];
+
+  // Apply all filters
+  const getFilteredItems = () => {
+    return menuItems.filter((item) => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const name = item.name?.toLowerCase() || '';
+        const description = item.description?.toLowerCase() || '';
+        if (!name.includes(query) && !description.includes(query)) {
+          return false;
+        }
+      }
+
+      // Veg filter
+      if (vegFilter === 'veg' && !item.veg) return false;
+      if (vegFilter === 'non-veg' && item.veg) return false;
+
+      // Category filter
+      if (categoryFilter !== 'all' && item.categoryId?.name !== categoryFilter) {
+        return false;
+      }
+
+      // Label filter
+      if (labelFilter === 'chef-special' && !item.isChefsSpecial) return false;
+      if (labelFilter === 'all-time-favorite' && !item.isAllTimeFavorite) return false;
+
+      return true;
+    });
+  };
+
+  const filteredItems = getFilteredItems();
+
+  // Group filtered items by category
+  const categorizedItems = filteredItems.reduce((acc, item) => {
     const categoryName = item.categoryId?.name || 'Other';
     if (!acc[categoryName]) {
       acc[categoryName] = [];
@@ -83,14 +113,6 @@ const Menu = () => {
     acc[categoryName].push(item);
     return acc;
   }, {} as Record<string, MenuItem[]>);
-
-  const filteredItems = (items: MenuItem[]) => {
-    if (!searchQuery) return items;
-    return items.filter((item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  };
 
   if (loading) {
     return (
@@ -107,74 +129,87 @@ const Menu = () => {
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-10 bg-card border-b border-border shadow-sm">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between mb-4">
+          <div className="space-y-4 mb-4">
+          {/* Track Order Button - Separate from header */}
+            <div className="space-y-4 mb-4">
+          {/* Track Order Button - Separate from header */}
+            <div className="flex justify-center">
+                <Button 
+                  className="fixed top-7 right-6 z-50 rounded-full shadow-lg h-14 w-14 md:w-auto md:px-6" 
+                  variant="outline" 
+                  onClick={() => navigate('/')}
+                >
+                  Track and review your order
+                </Button>
+              </div>
+            </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">Our Menu</h1>
               <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
             </div>
           </div>
-          
-          <div className="flex flex-col sm:flex-row gap-3">
+
+          <div className="flex flex-col gap-3">
             <Input
               placeholder="Search menu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1"
+              className="w-full"
             />
-            
-            <Select value={vegFilter} onValueChange={(value: any) => setVegFilter(value)}>
-              <SelectTrigger className="w-full sm:w-48">
-                <Filter className="w-4 h-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Items</SelectItem>
-                <SelectItem value="veg">Veg Only</SelectItem>
-                <SelectItem value="non-veg">Non-Veg Only</SelectItem>
-              </SelectContent>
-            </Select>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Select value={vegFilter} onValueChange={(value: any) => setVegFilter(value)}>
+                <SelectTrigger>
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Veg & Non-Veg</SelectItem>
+                  <SelectItem value="veg">Veg Only</SelectItem>
+                  <SelectItem value="non-veg">Non-Veg Only</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger>
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={labelFilter} onValueChange={setLabelFilter}>
+                <SelectTrigger>
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Labels" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Specialities</SelectItem>
+                  <SelectItem value="chef-special">Chef's Special</SelectItem>
+                  <SelectItem value="all-time-favorite">All-Time Favorite</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-12">
-        {filteredItems(allTimeFavorites).length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-6">
-              <Star className="w-6 h-6 text-accent" />
-              <h2 className="text-2xl font-bold text-foreground">All-Time Favorites</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredItems(allTimeFavorites).map((item) => (
-                <MenuItemCard key={item._id} item={item} onAddToCart={handleAddToCart} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {filteredItems(chefsSpecials).length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-6">
-              <ChefHat className="w-6 h-6 text-accent" />
-              <h2 className="text-2xl font-bold text-foreground">Chef's Specials</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredItems(chefsSpecials).map((item) => (
-                <MenuItemCard key={item._id} item={item} onAddToCart={handleAddToCart} />
-              ))}
-            </div>
-          </section>
-        )}
-
         {Object.entries(categorizedItems).map(([category, items]) => {
-          const filtered = filteredItems(items);
-          if (filtered.length === 0) return null;
+          if (items.length === 0) return null;
           
           return (
             <section key={category}>
               <h2 className="text-2xl font-bold text-foreground mb-6">{category}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filtered.map((item) => (
+                {items.map((item) => (
                   <MenuItemCard key={item._id} item={item} onAddToCart={handleAddToCart} />
                 ))}
               </div>
@@ -182,9 +217,9 @@ const Menu = () => {
           );
         })}
 
-        {menuItems.length === 0 && (
+        {filteredItems.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">No menu items available</p>
+            <p className="text-muted-foreground">No items match your filters</p>
           </div>
         )}
       </main>

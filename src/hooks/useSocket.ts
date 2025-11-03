@@ -1,66 +1,57 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+// ✅ Create one global socket instance
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+
+let socket: Socket | null = null;
+
+// This ensures socket persists across hot reloads in Vite
+if (!window._socketInstance) {
+  window._socketInstance = io(SOCKET_URL, {
+    withCredentials: true,
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: 5,
+    transports: ['websocket'], // optional: use WS directly to avoid polling
+  });
+}
+socket = window._socketInstance;
 
 export const useSocket = () => {
-  const socketRef = useRef<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
+  const [isConnected, setIsConnected] = useState(socket.connected);
 
   useEffect(() => {
-    // Initialize socket connection
-    socketRef.current = io(SOCKET_URL, {
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: maxReconnectAttempts,
-    });
+    const handleConnect = () => setIsConnected(true);
+    const handleDisconnect = () => setIsConnected(false);
 
-    const socket = socketRef.current;
-
-    socket.on('connect', () => {
-      console.log('Socket connected');
-      setIsConnected(true);
-      reconnectAttempts.current = 0;
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected');
-      setIsConnected(false);
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
-      reconnectAttempts.current += 1;
-      
-      if (reconnectAttempts.current >= maxReconnectAttempts) {
-        console.error('Max reconnection attempts reached');
-      }
-    });
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
 
     return () => {
-      socket.disconnect();
+      // ❗ Do NOT disconnect the socket on unmount (it's global)
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
     };
   }, []);
 
   const joinTable = (tableNumber: string) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit('join_table', { tableNumber });
+    if (socket && socket.connected) {
+      socket.emit('join_table', { tableNumber });
     }
   };
 
   const on = (event: string, callback: (...args: any[]) => void) => {
-    socketRef.current?.on(event, callback);
+    socket?.on(event, callback);
   };
 
   const off = (event: string, callback?: (...args: any[]) => void) => {
-    socketRef.current?.off(event, callback);
+    socket?.off(event, callback);
   };
 
   return {
-    socket: socketRef.current,
+    socket,
     isConnected,
     joinTable,
     on,
